@@ -1,58 +1,46 @@
-# Therapist Time Report — Render Deployment Guide
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
 
-## What this is
-A small Node.js server that:
-1. Acts as a proxy between your browser and the Cliniko API (bypassing CORS restrictions)
-2. Serves the dashboard at your own private URL
+const app = express();
+const PORT = process.env.PORT || 3000;
 
----
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
-## Step-by-step: Deploy to Render (free)
+// Proxy endpoint — fetches any Cliniko API path
+app.get('/cliniko/*', async (req, res) => {
+  const apiKey  = req.headers['x-cliniko-key'];
+  const region  = req.headers['x-cliniko-region'] || 'au1';
 
-### 1. Create a GitHub account (if you don't have one)
-Go to https://github.com and sign up.
+  if (!apiKey) return res.status(400).json({ error: 'Missing x-cliniko-key header' });
 
-### 2. Create a new repository
-1. Click the **+** icon → **New repository**
-2. Name it `therapist-time-report`
-3. Set it to **Private**
-4. Click **Create repository**
+  const clinikoPath = req.path.replace(/^\/cliniko/, '');
+  const query       = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  const url         = `https://api.${region}.cliniko.com/v1${clinikoPath}${query}`;
 
-### 3. Upload these files
-In your new repository, click **Add file → Upload files** and upload:
-- `server.js`
-- `package.json`
-- The `public/` folder (containing `index.html`)
+  const credentials = Buffer.from(apiKey + ':').toString('base64');
 
-### 4. Create a Render account
-Go to https://render.com and sign up with your GitHub account.
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Basic ${credentials}`,
+        'Accept':        'application/json',
+        'User-Agent':    'TherapistTimeReport/1.0'
+      }
+    });
 
-### 5. Deploy on Render
-1. Click **New → Web Service**
-2. Connect your GitHub repo (`therapist-time-report`)
-3. Fill in:
-   - **Name**: therapist-time-report (or anything you like)
-   - **Runtime**: Node
-   - **Build Command**: `npm install`
-   - **Start Command**: `node server.js`
-4. Click **Create Web Service**
+    const data = await response.json();
 
-Render will build and deploy in ~2 minutes.
-You'll get a URL like: `https://therapist-time-report.onrender.com`
+    if (!response.ok) {
+      return res.status(response.status).json(data);
+    }
 
----
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-## Using the dashboard
-1. Open your Render URL in any browser
-2. Go to **Cliniko → My Info → API Keys** and create a new key
-3. Paste the key into the dashboard and select your region
-4. Click **Load Data**
-
-The dashboard will auto-refresh every Friday at 3:15pm AEST.
-
----
-
-## Notes
-- The free Render tier spins down after 15 min of inactivity (cold start ~30 sec)
-- Your API key is never stored on the server — it's sent with each request from your browser
-- To keep it always-on, upgrade to Render's $7/month plan
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
