@@ -293,7 +293,7 @@ async function loadData() {
 
     showState('<div class="spinner"></div><div>Fetching appointments…</div>');
     const appointments = await proxyFetch(
-      `/individual_appointments?q[starts_at][gteq]=${s}T00:00:00Z&q[starts_at][lteq]=${e}T23:59:59Z`,
+  `/appointments?q[appointment_start][gteq]=${s}T00:00:00Z&q[appointment_start][lteq]=${e}T23:59:59Z`,
       apiKey, region
     );
 
