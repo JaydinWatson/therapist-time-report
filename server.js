@@ -10,35 +10,39 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Proxy endpoint — fetches any Cliniko API path
-app.get('/cliniko/*', async (req, res) => {
-  const apiKey  = req.headers['x-cliniko-key'];
-  const region  = req.headers['x-cliniko-region'] || 'au1';
+app.get('/cliniko*', async (req, res) => {
+  const apiKey = req.headers['x-cliniko-key'];
+  const region = req.headers['x-cliniko-region'] || 'au1';
 
   if (!apiKey) return res.status(400).json({ error: 'Missing x-cliniko-key header' });
 
-  const clinikoPath = req.path.replace(/^\/cliniko/, '');
-  const query       = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
-  const url         = `https://api.${region}.cliniko.com/v1${clinikoPath}${query}`;
+  const clinikoPath = req.path.replace(/^\/cliniko/, '') || '/';
+  const query = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  const url = `https://api.${region}.cliniko.com/v1${clinikoPath}${query}`;
 
   const credentials = Buffer.from(apiKey + ':').toString('base64');
+
+  console.log(`Proxying: ${url}`);
 
   try {
     const response = await fetch(url, {
       headers: {
         'Authorization': `Basic ${credentials}`,
-        'Accept':        'application/json',
-        'User-Agent':    'TherapistTimeReport/1.0'
+        'Accept': 'application/json',
+        'User-Agent': 'TherapistTimeReport (admin@therapistpractice.com)'
       }
     });
 
     const data = await response.json();
 
     if (!response.ok) {
+      console.error(`Cliniko error ${response.status}:`, JSON.stringify(data));
       return res.status(response.status).json(data);
     }
 
     res.json(data);
   } catch (err) {
+    console.error('Proxy error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
